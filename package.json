@@ -1,0 +1,127 @@
+{
+  "name": "ridl-vscode",
+  "displayName": "RIDL",
+  "description": "Syntax highlighting and language server support for webrpc RIDL.",
+  "icon": "assets/icon.png",
+  "version": "0.0.1",
+  "publisher": "webrpc",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/webrpc/ridl-vscode.git"
+  },
+  "keywords": [
+    "ridl",
+    "webrpc",
+    "rpc",
+    "idl",
+    "language-server",
+    "syntax-highlighting"
+  ],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:ridl",
+    "onCommand:ridl.installLanguageServer",
+    "onCommand:ridl.updateLanguageServer",
+    "onCommand:ridl.restartLanguageServer",
+    "onCommand:ridl.showReferences"
+  ],
+  "main": "./extension.js",
+  "scripts": {
+    "test": "node --test ./test/serverInstaller.test.js ./test/commandAdapters.test.js ./test/extension.test.js && node --check ./serverInstaller.js && node --check ./commandAdapters.js && node --check ./extension.js",
+    "package": "npx @vscode/vsce package --no-yarn",
+    "preinstall:local": "npm run package",
+    "install:local": "node -e \"const pkg=require('./package.json'); require('child_process').execFileSync('code',['--install-extension',pkg.name + '-' + pkg.version + '.vsix','--force'],{stdio:'inherit'});\"",
+    "publish:vsce": "npx @vscode/vsce publish --no-yarn"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "ridl",
+        "aliases": [
+          "RIDL",
+          "ridl"
+        ],
+        "extensions": [
+          ".ridl"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ridl",
+        "scopeName": "source.ridl",
+        "path": "./syntaxes/ridl.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "ridl.installLanguageServer",
+        "title": "RIDL: Install Language Server"
+      },
+      {
+        "command": "ridl.updateLanguageServer",
+        "title": "RIDL: Update Language Server"
+      },
+      {
+        "command": "ridl.restartLanguageServer",
+        "title": "RIDL: Restart Language Server"
+      },
+      {
+        "command": "ridl.showReferences",
+        "title": "RIDL: Show References"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "ridl.restartLanguageServer",
+          "when": "resourceLangId == ridl",
+          "group": "navigation@100"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "RIDL",
+      "properties": {
+        "ridl.languageServer.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Absolute path to the `ridl-lsp` binary. If set, the extension uses this instead of the managed GOPATH/bin binary."
+        },
+        "ridl.languageServer.importPath": {
+          "type": "string",
+          "default": "github.com/webrpc/ridl-lsp/cmd/ridl-lsp",
+          "markdownDescription": "Go import path used for managed `go install` updates."
+        },
+        "ridl.languageServer.promptToInstall": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Prompt to install `ridl-lsp` into GOPATH/bin when RIDL files are opened and no binary is found."
+        },
+        "ridl.languageServer.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "markdownDescription": "Trace level forwarded to the RIDL language client."
+        }
+      }
+    }
+  }
+}

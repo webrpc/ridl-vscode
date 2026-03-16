@@ -1,0 +1,269 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "RIDL",
+  "scopeName": "source.ridl",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#headers" },
+    { "include": "#importBlock" },
+    { "include": "#structBlock" },
+    { "include": "#enumBlock" },
+    { "include": "#errorDecl" },
+    { "include": "#serviceBlock" },
+    { "include": "#annotations" },
+    { "include": "#meta" },
+    { "include": "#strings" },
+    { "include": "#types" },
+    { "include": "#numbers" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.ridl",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.ridl",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.ridl",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "headers": {
+      "patterns": [
+        {
+          "match": "^(\\s*)(webrpc|name|version|basepath)\\b(\\s*)(=)",
+          "captures": {
+            "2": { "name": "keyword.control.ridl" },
+            "4": { "name": "keyword.operator.assignment.ridl" }
+          }
+        }
+      ]
+    },
+    "importBlock": {
+      "begin": "^(\\s*)(import)\\b",
+      "beginCaptures": {
+        "2": { "name": "keyword.control.import.ridl" }
+      },
+      "end": "(?=^\\s*(?:webrpc|name|version|basepath|import|struct|enum|error|service)\\b|\\z)",
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#strings" },
+        {
+          "match": "^(\\s*-\\s*)(?:\"([^\"]+)\"|([^#\"\\n]+))",
+          "captures": {
+            "1": { "name": "punctuation.definition.list.ridl" },
+            "2": { "name": "string.quoted.double.import.ridl" },
+            "3": { "name": "string.unquoted.import.ridl" }
+          }
+        },
+        {
+          "match": "^(\\s*-\\s*)([A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "punctuation.definition.list.ridl" },
+            "2": { "name": "entity.name.type.import-member.ridl" }
+          }
+        }
+      ]
+    },
+    "structBlock": {
+      "begin": "^(\\s*)(struct)\\s+([A-Z][A-Za-z0-9_]*)",
+      "beginCaptures": {
+        "2": { "name": "keyword.declaration.struct.ridl" },
+        "3": { "name": "entity.name.type.struct.ridl" }
+      },
+      "end": "(?=^\\s*(?:webrpc|name|version|basepath|import|struct|enum|error|service)\\b|\\z)",
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#annotations" },
+        { "include": "#meta" },
+        { "include": "#strings" },
+        { "include": "#types" },
+        { "include": "#numbers" },
+        { "include": "#operators" },
+        {
+          "match": "^(\\s*-\\s*)([A-Za-z_][A-Za-z0-9_]*)(\\?)?(\\s*:)",
+          "captures": {
+            "1": { "name": "punctuation.definition.list.ridl" },
+            "2": { "name": "entity.other.attribute-name.ridl" },
+            "3": { "name": "keyword.operator.optional.ridl" },
+            "4": { "name": "punctuation.separator.type.ridl" }
+          }
+        }
+      ]
+    },
+    "enumBlock": {
+      "begin": "^(\\s*)(enum)\\s+([A-Z][A-Za-z0-9_]*)(\\s*:)",
+      "beginCaptures": {
+        "2": { "name": "keyword.declaration.enum.ridl" },
+        "3": { "name": "entity.name.type.enum.ridl" },
+        "4": { "name": "punctuation.separator.type.ridl" }
+      },
+      "end": "(?=^\\s*(?:webrpc|name|version|basepath|import|struct|enum|error|service)\\b|\\z)",
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#strings" },
+        { "include": "#numbers" },
+        { "include": "#operators" },
+        {
+          "match": "^(\\s*-\\s*)([A-Za-z_][A-Za-z0-9_]*)(\\s*=)?",
+          "captures": {
+            "1": { "name": "punctuation.definition.list.ridl" },
+            "2": { "name": "entity.other.attribute-name.ridl" },
+            "3": { "name": "keyword.operator.assignment.ridl" }
+          }
+        }
+      ]
+    },
+    "errorDecl": {
+      "patterns": [
+        {
+          "match": "^(\\s*)(error)\\s+(\\d+)\\s+([A-Z][A-Za-z0-9_]*)\\b(?:.*?\\b(HTTP)\\b\\s+(\\d+))?",
+          "captures": {
+            "2": { "name": "keyword.declaration.error.ridl" },
+            "3": { "name": "constant.numeric.integer.ridl" },
+            "4": { "name": "entity.name.type.error.ridl" },
+            "5": { "name": "keyword.control.http.ridl" },
+            "6": { "name": "constant.numeric.integer.ridl" }
+          }
+        }
+      ]
+    },
+    "serviceBlock": {
+      "begin": "^(\\s*)(service)\\s+([A-Za-z_][A-Za-z0-9_\\-/]*)",
+      "beginCaptures": {
+        "2": { "name": "keyword.declaration.service.ridl" },
+        "3": { "name": "entity.name.type.service.ridl" }
+      },
+      "end": "(?=^\\s*(?:webrpc|name|version|basepath|import|struct|enum|error|service)\\b|\\z)",
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#annotations" },
+        { "include": "#strings" },
+        { "include": "#types" },
+        { "include": "#numbers" },
+        { "include": "#operators" },
+        {
+          "match": "^(\\s*-\\s*)(stream\\s+)?(proxy\\s+)?([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\(|$|\\s)",
+          "captures": {
+            "1": { "name": "punctuation.definition.list.ridl" },
+            "2": { "name": "keyword.control.stream.ridl" },
+            "3": { "name": "keyword.control.proxy.ridl" },
+            "4": { "name": "entity.name.function.ridl" }
+          }
+        },
+        {
+          "match": "\\b(errors|stream|proxy|HTTP)\\b",
+          "name": "keyword.control.ridl"
+        }
+      ]
+    },
+    "annotations": {
+      "patterns": [
+        {
+          "begin": "(@)([A-Za-z_][A-Za-z0-9_.-]*)(\\s*(?::|=)\\s*)",
+          "beginCaptures": {
+            "1": { "name": "storage.type.annotation.ridl" },
+            "2": { "name": "meta.annotation.key.ridl" },
+            "3": { "name": "punctuation.separator.annotation.ridl" }
+          },
+          "end": "(?=\\s+#|$)",
+          "patterns": [
+            {
+              "name": "string.quoted.double.annotation-value.ridl",
+              "begin": "\"",
+              "end": "\"",
+              "patterns": [
+                {
+                  "name": "constant.character.escape.ridl",
+                  "match": "\\\\."
+                }
+              ]
+            },
+            {
+              "match": "[^#\"]+?(?=\\s*(?:#|$))",
+              "name": "string.unquoted.annotation-value.ridl"
+            }
+          ]
+        },
+        {
+          "match": "(@)([A-Za-z_][A-Za-z0-9_.-]*)",
+          "captures": {
+            "1": { "name": "storage.type.annotation.ridl" },
+            "2": { "name": "meta.annotation.key.ridl" }
+          }
+        }
+      ]
+    },
+    "meta": {
+      "patterns": [
+        {
+          "begin": "^(\\s*\\+\\s*)([A-Za-z_][A-Za-z0-9_.-]*)(\\s*=\\s*)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.meta.ridl" },
+            "2": { "name": "variable.other.meta-key.ridl" },
+            "3": { "name": "keyword.operator.assignment.ridl" }
+          },
+          "end": "(?=\\s+#|$)",
+          "patterns": [
+            {
+              "name": "string.quoted.double.meta-value.ridl",
+              "begin": "\"",
+              "end": "\"",
+              "patterns": [
+                {
+                  "name": "constant.character.escape.ridl",
+                  "match": "\\\\."
+                }
+              ]
+            },
+            {
+              "match": "[^#\"]+?(?=\\s*(?:#|$))",
+              "name": "string.unquoted.meta-value.ridl"
+            }
+          ]
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "match": "\\b(string|bool|byte|uint|uint8|uint16|uint32|uint64|int|int8|int16|int32|int64|bigint|float32|float64|timestamp|map|any|null)\\b",
+          "name": "support.type.builtin.ridl"
+        },
+        {
+          "match": "\\b[A-Z][A-Za-z0-9_]*\\b",
+          "name": "support.type.ridl"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "match": "\\b\\d+\\b",
+          "name": "constant.numeric.integer.ridl"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "match": "=>|=|\\||\\?|:|\\+|-",
+          "name": "keyword.operator.ridl"
+        }
+      ]
+    }
+  }
+}
