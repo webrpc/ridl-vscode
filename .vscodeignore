@@ -1,0 +1,7 @@
+.git/**
+.vscode/**
+test/**
+*.vsix
+jsconfig.json
+.gitignore
+**/.DS_Store
