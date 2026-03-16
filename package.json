@@ -36,7 +36,7 @@
   ],
   "main": "./extension.js",
   "scripts": {
-    "test": "node --test ./test/serverInstaller.test.js ./test/commandAdapters.test.js ./test/extension.test.js && node --check ./serverInstaller.js && node --check ./commandAdapters.js && node --check ./extension.js",
+    "test": "node --test ./test/serverInstaller.test.js ./test/commandAdapters.test.js ./test/extension.test.js ./test/syntaxGrammar.test.js && node --check ./serverInstaller.js && node --check ./commandAdapters.js && node --check ./extension.js",
     "package": "npx @vscode/vsce package --no-yarn",
     "preinstall:local": "npm run package",
     "install:local": "node -e \"const pkg=require('./package.json'); require('child_process').execFileSync('code',['--install-extension',pkg.name + '-' + pkg.version + '.vsix','--force'],{stdio:'inherit'});\"",
