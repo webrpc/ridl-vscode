@@ -130,13 +130,14 @@
     "errorDecl": {
       "patterns": [
         {
-          "match": "^(\\s*)(error)\\s+(\\d+)\\s+([A-Z][A-Za-z0-9_]*)\\b(?:.*?\\b(HTTP)\\b\\s+(\\d+))?",
+          "match": "^(\\s*)(error)\\s+(\\d+)\\s+([A-Z][A-Za-z0-9_]*)(?:\\s+(\"(?:\\\\.|[^\"])*\"))?(?:\\s+\\b(HTTP)\\b\\s+(\\d+))?",
           "captures": {
             "2": { "name": "keyword.declaration.error.ridl" },
             "3": { "name": "constant.numeric.integer.ridl" },
             "4": { "name": "entity.name.type.error.ridl" },
-            "5": { "name": "keyword.control.http.ridl" },
-            "6": { "name": "constant.numeric.integer.ridl" }
+            "5": { "name": "string.quoted.double.error-message.ridl" },
+            "6": { "name": "keyword.control.http.ridl" },
+            "7": { "name": "constant.numeric.integer.ridl" }
           }
         }
       ]
