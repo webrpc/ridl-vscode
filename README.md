@@ -24,6 +24,42 @@ You can also manage the language server manually from the Command Palette:
 - `RIDL: Update Language Server`
 - `RIDL: Restart Language Server`
 
+## Install From Repo
+
+If you want to build and install the latest extension from the repository without cloning it first, stream the installer directly.
+
+macOS and Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/webrpc/ridl-vscode/master/install.sh | bash
+```
+
+Windows PowerShell:
+
+```powershell
+Invoke-RestMethod https://raw.githubusercontent.com/webrpc/ridl-vscode/master/install.ps1 | Invoke-Expression
+```
+
+Requirements:
+
+- `git`
+- `npm`
+- the VS Code `code` CLI available in `PATH`
+
+Both scripts clone the repo into a temporary directory, build the extension, install it into VS Code, and remove the temporary checkout when they finish.
+
+If you prefer to run the installer from a local checkout instead:
+
+```bash
+./install.sh
+```
+
+```powershell
+.\install.ps1
+```
+
+To install from a different repo URL, set `RIDL_VSCODE_REPO` before running the script.
+
 ## Configuration
 
 - `ridl.languageServer.path`: absolute path to a `ridl-lsp` binary to use instead of the managed one
