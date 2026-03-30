@@ -45,10 +45,11 @@
     "headers": {
       "patterns": [
         {
-          "match": "^(\\s*)(webrpc|name|version|basepath)\\b(\\s*)(=)",
+          "match": "^(\\s*)(webrpc|name|version|basepath)\\b(\\s*)(=)(\\s*)(\\S+)?",
           "captures": {
             "2": { "name": "keyword.control.ridl" },
-            "4": { "name": "keyword.operator.assignment.ridl" }
+            "4": { "name": "keyword.operator.assignment.ridl" },
+            "6": { "name": "string.unquoted.header-value.ridl" }
           }
         }
       ]
@@ -106,11 +107,12 @@
       ]
     },
     "enumBlock": {
-      "begin": "^(\\s*)(enum)\\s+([A-Z][A-Za-z0-9_]*)(\\s*:)",
+      "begin": "^(\\s*)(enum)\\s+([A-Z][A-Za-z0-9_]*)(\\s*:\\s*)(\\S+)",
       "beginCaptures": {
         "2": { "name": "keyword.declaration.enum.ridl" },
         "3": { "name": "entity.name.type.enum.ridl" },
-        "4": { "name": "punctuation.separator.type.ridl" }
+        "4": { "name": "punctuation.separator.type.ridl" },
+        "5": { "name": "support.type.ridl" }
       },
       "end": "(?=^\\s*(?:webrpc|name|version|basepath|import|struct|enum|type|error|service)\\b|\\z)",
       "patterns": [
