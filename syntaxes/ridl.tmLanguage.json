@@ -8,6 +8,7 @@
     { "include": "#importBlock" },
     { "include": "#structBlock" },
     { "include": "#enumBlock" },
+    { "include": "#typeAliasBlock" },
     { "include": "#errorDecl" },
     { "include": "#serviceBlock" },
     { "include": "#annotations" },
@@ -57,7 +58,7 @@
       "beginCaptures": {
         "2": { "name": "keyword.control.import.ridl" }
       },
-      "end": "(?=^\\s*(?:webrpc|name|version|basepath|import|struct|enum|error|service)\\b|\\z)",
+      "end": "(?=^\\s*(?:webrpc|name|version|basepath|import|struct|enum|type|error|service)\\b|\\z)",
       "patterns": [
         { "include": "#comments" },
         { "include": "#strings" },
@@ -84,7 +85,7 @@
         "2": { "name": "keyword.declaration.struct.ridl" },
         "3": { "name": "entity.name.type.struct.ridl" }
       },
-      "end": "(?=^\\s*(?:webrpc|name|version|basepath|import|struct|enum|error|service)\\b|\\z)",
+      "end": "(?=^\\s*(?:webrpc|name|version|basepath|import|struct|enum|type|error|service)\\b|\\z)",
       "patterns": [
         { "include": "#comments" },
         { "include": "#annotations" },
@@ -111,7 +112,7 @@
         "3": { "name": "entity.name.type.enum.ridl" },
         "4": { "name": "punctuation.separator.type.ridl" }
       },
-      "end": "(?=^\\s*(?:webrpc|name|version|basepath|import|struct|enum|error|service)\\b|\\z)",
+      "end": "(?=^\\s*(?:webrpc|name|version|basepath|import|struct|enum|type|error|service)\\b|\\z)",
       "patterns": [
         { "include": "#comments" },
         { "include": "#strings" },
@@ -125,6 +126,20 @@
             "3": { "name": "keyword.operator.assignment.ridl" }
           }
         }
+      ]
+    },
+    "typeAliasBlock": {
+      "begin": "^(\\s*)(type)\\s+([A-Z][A-Za-z0-9_]*)(\\s*:)",
+      "beginCaptures": {
+        "2": { "name": "keyword.declaration.type.ridl" },
+        "3": { "name": "entity.name.type.alias.ridl" },
+        "4": { "name": "punctuation.separator.type.ridl" }
+      },
+      "end": "(?=^\\s*(?:webrpc|name|version|basepath|import|struct|enum|type|error|service)\\b|\\z)",
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#meta" },
+        { "include": "#types" }
       ]
     },
     "errorDecl": {
@@ -148,7 +163,7 @@
         "2": { "name": "keyword.declaration.service.ridl" },
         "3": { "name": "entity.name.type.service.ridl" }
       },
-      "end": "(?=^\\s*(?:webrpc|name|version|basepath|import|struct|enum|error|service)\\b|\\z)",
+      "end": "(?=^\\s*(?:webrpc|name|version|basepath|import|struct|enum|type|error|service)\\b|\\z)",
       "patterns": [
         { "include": "#comments" },
         { "include": "#annotations" },
