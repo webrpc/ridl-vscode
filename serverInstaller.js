@@ -8,7 +8,10 @@ function executableName(platform = process.platform) {
 function findOnPath(platform = process.platform) {
   const cmd = platform === 'win32' ? 'where' : 'which';
   try {
-    return childProcess.execFileSync(cmd, [executableName(platform)], { encoding: 'utf8' }).trim().split('\n')[0];
+    return childProcess.execFileSync(cmd, [executableName(platform)], { encoding: 'utf8' })
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean) || '';
   } catch {
     return '';
   }
