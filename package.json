@@ -1,10 +1,10 @@
 {
   "name": "ridl-vscode",
-  "displayName": "RIDL",
+  "displayName": "webrpc RIDL",
   "description": "Syntax highlighting and language server support for webrpc RIDL.",
   "icon": "assets/icon.png",
-  "version": "0.0.1",
-  "publisher": "webrpc",
+  "version": "0.1.0",
+  "publisher": "webrpc-io",
   "license": "MIT",
   "repository": {
     "type": "git",

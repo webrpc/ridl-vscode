@@ -14,6 +14,19 @@ RIDL adds first-class editor support for `.ridl` files used by webrpc schemas.
 - VS Code `1.90+`
 - Go installed locally if you want the extension to install or update `ridl-lsp` for you
 
+## Install
+
+Install **RIDL** from the Visual Studio Marketplace:
+
+- In VS Code, open the Extensions view (`Cmd+Shift+X` / `Ctrl+Shift+X`), search for **RIDL**, and click **Install**.
+- Or from the command line:
+
+  ```bash
+  code --install-extension webrpc-io.ridl-vscode
+  ```
+
+- Or open the [Marketplace page](https://marketplace.visualstudio.com/items?itemName=webrpc-io.ridl-vscode) and click **Install**.
+
 ## Getting Started
 
 Open any `.ridl` file. If `ridl-lsp` is not available in `$GOPATH/bin`, the extension can prompt to install it.

@@ -2,6 +2,7 @@ const childProcess = require('child_process');
 const fs = require('fs');
 const vscode = require('vscode');
 const {
+  findOnPath,
   managedBinaryPath
 } = require('./serverInstaller');
 const {
@@ -189,9 +190,14 @@ async function resolveLanguageServerPath(context, promptOnMissing) {
     return '';
   }
 
+  const pathBinary = findOnPath();
+  if (pathBinary) {
+    return pathBinary;
+  }
+
   const goEnv = await readGoEnv();
   if (!goEnv.gopath) {
-    void vscode.window.showWarningMessage('RIDL could not determine GOPATH, so the managed ridl-lsp binary location is unknown.');
+    void vscode.window.showWarningMessage('ridl-lsp was not found. Install it with: brew install webrpc/tap/ridl-lsp');
     return '';
   }
 
