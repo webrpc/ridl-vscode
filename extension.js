@@ -16,6 +16,8 @@ const commandRestart = 'ridl.restartLanguageServer';
 const commandShowReferences = 'ridl.showReferences';
 
 const defaultImportPath = 'github.com/webrpc/ridl-lsp/cmd/ridl-lsp';
+const brewFormula = 'ridl-lsp';
+const brewInstallTarget = 'webrpc/tap/ridl-lsp';
 const outputChannelName = 'RIDL Language Server';
 const traceOutputChannelName = 'RIDL Language Server Trace';
 
@@ -32,7 +34,7 @@ async function activate(context) {
   context.subscriptions.push(
     outputChannel,
     traceOutputChannel,
-    vscode.commands.registerCommand(commandInstall, () => installManagedLanguageServer(context, false)),
+    vscode.commands.registerCommand(commandInstall, () => installLanguageServer(context)),
     vscode.commands.registerCommand(commandUpdate, () => updateLanguageServer(context)),
     vscode.commands.registerCommand(commandRestart, () => restartLanguageServer(context)),
     vscode.commands.registerCommand(commandShowReferences, (...args) => showReferences(...args))
@@ -197,26 +199,25 @@ async function resolveLanguageServerPath(context, promptOnMissing) {
   }
 
   const goEnv = await readGoEnv();
-  if (!goEnv.gopath) {
-    void vscode.window.showWarningMessage('ridl-lsp was not found. Install it with: brew install webrpc/tap/ridl-lsp');
-    return '';
-  }
-
-  const binaryPath = managedBinaryPath(goEnv.gopath);
-  if (binaryPath && fs.existsSync(binaryPath)) {
-    return binaryPath;
+  const managedPath = managedBinaryPath(goEnv.gopath);
+  if (managedPath && fs.existsSync(managedPath)) {
+    return managedPath;
   }
 
   if (promptOnMissing && configuration().get('languageServer.promptToInstall', true)) {
     const choice = await vscode.window.showWarningMessage(
-      'ridl-lsp was not found in GOPATH/bin. Install it now?',
+      'ridl-lsp was not found. Install it now?',
       'Install',
       'Not Now'
     );
 
     if (choice === 'Install') {
-      const installed = await installManagedLanguageServer(context, false, { restart: false });
-      return installed ? binaryPath : '';
+      const installed = await installLanguageServer(context, { restart: false });
+      if (!installed) {
+        return '';
+      }
+      // The binary may now be on PATH (Homebrew) or in GOPATH/bin (go install).
+      return findOnPath() || (managedPath && fs.existsSync(managedPath) ? managedPath : '');
     }
   }
 
@@ -245,6 +246,73 @@ async function installManagedLanguageServer(context, isUpdate, options = {}) {
     await restartLanguageServer(context);
   }
   return true;
+}
+
+// installLanguageServer installs ridl-lsp via Homebrew or go install. When both
+// are available it asks which to use, so a fresh install matches the tool the
+// user expects (and the update command can later track that source).
+async function installLanguageServer(context, options = {}) {
+  const [goAvailable, brewAvailable] = await Promise.all([isGoAvailable(), isBrewAvailable()]);
+  if (!goAvailable && !brewAvailable) {
+    void vscode.window.showErrorMessage(
+      'Installing ridl-lsp needs Homebrew or Go. Install one, or set ridl.languageServer.path to an existing binary.'
+    );
+    return false;
+  }
+
+  let source;
+  if (goAvailable && brewAvailable) {
+    source = await pickInstallSource();
+    if (!source) {
+      return false;
+    }
+  } else {
+    source = brewAvailable ? 'brew' : 'go';
+  }
+
+  if (source === 'brew') {
+    return brewInstallLanguageServer(context, options);
+  }
+  return installManagedLanguageServer(context, false, options);
+}
+
+async function pickInstallSource() {
+  const importPath = configuration().get('languageServer.importPath', defaultImportPath).trim() || defaultImportPath;
+  const picked = await vscode.window.showQuickPick(
+    [
+      { label: 'Homebrew', description: `brew install ${brewInstallTarget}`, source: 'brew' },
+      { label: 'Go', description: `go install ${importPath}@latest`, source: 'go' }
+    ],
+    {
+      title: 'Install ridl-lsp',
+      placeHolder: 'Choose how to install the RIDL language server'
+    }
+  );
+  return picked ? picked.source : '';
+}
+
+async function brewInstallLanguageServer(context, options = {}) {
+  const label = `Installing ridl-lsp via brew install ${brewInstallTarget}`;
+  appendOutputLine(label);
+  const ok = await runWithProgress(label, 'brew', ['install', brewInstallTarget]);
+  if (!ok) {
+    return false;
+  }
+
+  await vscode.window.showInformationMessage('ridl-lsp installed via Homebrew.');
+  if (options.restart !== false) {
+    await restartLanguageServer(context);
+  }
+  return true;
+}
+
+async function isGoAvailable() {
+  const { gopath } = await readGoEnv();
+  return Boolean(gopath);
+}
+
+async function isBrewAvailable() {
+  return Boolean(await readBrewPrefix());
 }
 
 // updateLanguageServer updates whatever binary the editor actually runs, using the
@@ -292,7 +360,7 @@ async function detectActiveSource(serverPath) {
 async function brewUpgradeLanguageServer(context) {
   const label = 'Updating ridl-lsp via brew upgrade';
   appendOutputLine(label);
-  const ok = await runWithProgress(label, 'brew', ['upgrade', 'ridl-lsp']);
+  const ok = await runWithProgress(label, 'brew', ['upgrade', brewFormula]);
   if (!ok) {
     return false;
   }
@@ -376,6 +444,7 @@ module.exports = {
   __test: {
     ensureLanguageServerStarted,
     installManagedLanguageServer,
+    installLanguageServer,
     updateLanguageServer,
     restartLanguageServer,
     resetState() {

@@ -7,7 +7,7 @@ RIDL adds first-class editor support for `.ridl` files used by webrpc schemas.
 - syntax highlighting tailored for RIDL declarations, annotations, metadata, fields, and enum members
 - language server integration powered by `ridl-lsp`
 - go to definition, type definition, find references, rename, hover, code lens, and document links
-- commands to install `ridl-lsp`, and to update it in place via whichever tool installed it (Homebrew or `go install`)
+- commands to install `ridl-lsp` (choosing Homebrew or Go when both are available) and to update it in place via whichever tool installed it
 
 ## Requirements
 
@@ -35,7 +35,8 @@ install), then `$GOPATH/bin`. If none is found, it can prompt to install one.
 
 You can also manage the language server manually from the Command Palette:
 
-- `RIDL: Install Language Server`
+- `RIDL: Install Language Server` — installs via Homebrew or `go install`; when
+  both are available it asks which to use, otherwise it uses the one you have.
 - `RIDL: Update Language Server` — updates the active binary using the tool it
   was installed with (`brew upgrade` for a Homebrew install, `go install` for a
   `$GOPATH/bin` one); it won't install a second copy from the other source.

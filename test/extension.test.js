@@ -272,10 +272,12 @@ test('installManagedLanguageServer still restarts an existing client by default'
   assert.equal(state.createdClients[0].startCalls, 1);
 });
 
-function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tmp/go', realpath } = {}) {
+function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tmp/go', realpath, quickPick } = {}) {
   const installerRuns = [];
   const warnings = [];
   const infos = [];
+  const errors = [];
+  const quickPicks = [];
 
   class FakeLanguageClient {
     async start() {}
@@ -308,7 +310,7 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
         return;
       }
       if (command === 'go' && args[0] === 'install') {
-        installerRuns.push('go');
+        installerRuns.push('go install');
         callback(null, '', '');
         return;
       }
@@ -321,7 +323,12 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
         return;
       }
       if (command === 'brew' && args[0] === 'upgrade') {
-        installerRuns.push('brew');
+        installerRuns.push('brew upgrade');
+        callback(null, '', '');
+        return;
+      }
+      if (command === 'brew' && args[0] === 'install') {
+        installerRuns.push('brew install');
         callback(null, '', '');
         return;
       }
@@ -344,7 +351,15 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
         return undefined;
       },
       async showErrorMessage(message) {
-        throw new Error(`unexpected showErrorMessage: ${message}`);
+        errors.push(message);
+        return undefined;
+      },
+      async showQuickPick(items) {
+        quickPicks.push(items);
+        if (!quickPick) {
+          return undefined;
+        }
+        return items.find((item) => item.source === quickPick);
       },
       async withProgress(_options, task) {
         return task();
@@ -408,7 +423,7 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
     }
   });
 
-  return { extension, state: { installerRuns, warnings, infos } };
+  return { extension, state: { installerRuns, warnings, infos, errors, quickPicks } };
 }
 
 test('updateLanguageServer upgrades via brew when the active binary is brew-managed', async () => {
@@ -421,7 +436,7 @@ test('updateLanguageServer upgrades via brew when the active binary is brew-mana
   const ok = await extension.__test.updateLanguageServer({ subscriptions: [] });
 
   assert.equal(ok, true);
-  assert.deepEqual(state.installerRuns, ['brew']);
+  assert.deepEqual(state.installerRuns, ['brew upgrade']);
 });
 
 test('updateLanguageServer uses go install when the active binary is in GOPATH', async () => {
@@ -434,7 +449,7 @@ test('updateLanguageServer uses go install when the active binary is in GOPATH',
   const ok = await extension.__test.updateLanguageServer({ subscriptions: [] });
 
   assert.equal(ok, true);
-  assert.deepEqual(state.installerRuns, ['go']);
+  assert.deepEqual(state.installerRuns, ['go install']);
 });
 
 test('updateLanguageServer refuses to cross-install for an unmanaged binary', async () => {
@@ -459,4 +474,53 @@ test('updateLanguageServer warns when no binary is installed', async () => {
   assert.equal(ok, false);
   assert.deepEqual(state.installerRuns, []);
   assert.equal(state.warnings.length, 1);
+});
+
+test('installLanguageServer asks which source when both brew and go are available', async () => {
+  const { extension, state } = createUpdateHarness({ brewPrefix: '/opt/homebrew', gopath: '/tmp/go', quickPick: 'brew' });
+
+  const ok = await extension.__test.installLanguageServer({ subscriptions: [] });
+
+  assert.equal(ok, true);
+  assert.equal(state.quickPicks.length, 1);
+  assert.deepEqual(state.installerRuns, ['brew install']);
+});
+
+test('installLanguageServer honors a go pick when both are available', async () => {
+  const { extension, state } = createUpdateHarness({ brewPrefix: '/opt/homebrew', gopath: '/tmp/go', quickPick: 'go' });
+
+  const ok = await extension.__test.installLanguageServer({ subscriptions: [] });
+
+  assert.equal(ok, true);
+  assert.deepEqual(state.installerRuns, ['go install']);
+});
+
+test('installLanguageServer aborts when the source pick is dismissed', async () => {
+  const { extension, state } = createUpdateHarness({ brewPrefix: '/opt/homebrew', gopath: '/tmp/go' });
+
+  const ok = await extension.__test.installLanguageServer({ subscriptions: [] });
+
+  assert.equal(ok, false);
+  assert.equal(state.quickPicks.length, 1);
+  assert.deepEqual(state.installerRuns, []);
+});
+
+test('installLanguageServer uses the only available source without asking', async () => {
+  const { extension, state } = createUpdateHarness({ brewPrefix: '/opt/homebrew', gopath: '' });
+
+  const ok = await extension.__test.installLanguageServer({ subscriptions: [] });
+
+  assert.equal(ok, true);
+  assert.equal(state.quickPicks.length, 0);
+  assert.deepEqual(state.installerRuns, ['brew install']);
+});
+
+test('installLanguageServer errors when neither brew nor go is available', async () => {
+  const { extension, state } = createUpdateHarness({ brewPrefix: '', gopath: '' });
+
+  const ok = await extension.__test.installLanguageServer({ subscriptions: [] });
+
+  assert.equal(ok, false);
+  assert.deepEqual(state.installerRuns, []);
+  assert.equal(state.errors.length, 1);
 });
