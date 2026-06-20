@@ -414,6 +414,7 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
 test('updateLanguageServer upgrades via brew when the active binary is brew-managed', async () => {
   const { extension, state } = createUpdateHarness({
     onPathBinary: '/opt/homebrew/bin/ridl-lsp',
+    realpath: '/opt/homebrew/Cellar/ridl-lsp/1.3.0/bin/ridl-lsp',
     brewPrefix: '/opt/homebrew'
   });
 

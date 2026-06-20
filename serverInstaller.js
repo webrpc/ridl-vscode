@@ -60,13 +60,22 @@ function detectInstallSource({ binaryPath, realBinaryPath, gopath, brewPrefix } 
     return 'go';
   }
 
-  if (isWithin(candidate, brewPrefix) || isWithin(resolved, brewPrefix)) {
-    return 'brew';
+  // Homebrew's bin symlink resolves into Cellar/<formula> (or opt/<formula>).
+  // Match those specifically, never the whole prefix: on Intel macOS the prefix
+  // is /usr/local, where plenty of non-brew binaries live in /usr/local/bin —
+  // treating the prefix as brew would route a hand-installed binary to
+  // `brew upgrade`.
+  if (brewPrefix) {
+    const cellar = path.join(brewPrefix, 'Cellar', 'ridl-lsp');
+    const opt = path.join(brewPrefix, 'opt', 'ridl-lsp');
+    if (isWithin(resolved, cellar) || isWithin(resolved, opt)) {
+      return 'brew';
+    }
   }
 
-  // Homebrew's bin entry symlinks into the Cellar; recognize that even when the
-  // prefix lookup failed.
-  if (resolved.includes(`${path.sep}Cellar${path.sep}`)) {
+  // Fallback when the prefix lookup failed: a resolved Cellar path for this
+  // formula is still an unambiguous Homebrew signal.
+  if (resolved.includes(`${path.sep}Cellar${path.sep}ridl-lsp${path.sep}`)) {
     return 'brew';
   }
 

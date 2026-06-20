@@ -48,9 +48,44 @@ test('detectInstallSource recognizes a go-installed binary', () => {
   );
 });
 
-test('detectInstallSource recognizes a brew binary under the prefix', () => {
+test('detectInstallSource recognizes a brew binary via the opt symlink', () => {
   assert.equal(
-    detectInstallSource({ binaryPath: '/opt/homebrew/bin/ridl-lsp', gopath: '/Users/me/go', brewPrefix: '/opt/homebrew' }, 'darwin'),
+    detectInstallSource(
+      {
+        binaryPath: '/opt/homebrew/bin/ridl-lsp',
+        realBinaryPath: '/opt/homebrew/opt/ridl-lsp/bin/ridl-lsp',
+        gopath: '/Users/me/go',
+        brewPrefix: '/opt/homebrew'
+      },
+      'darwin'
+    ),
+    'brew'
+  );
+});
+
+test('detectInstallSource does not treat a bare prefix-bin path as brew', () => {
+  // Intel macOS prefix is /usr/local, where /usr/local/bin holds many non-brew
+  // binaries; prefix containment alone must not route them to `brew upgrade`.
+  assert.equal(
+    detectInstallSource(
+      { binaryPath: '/usr/local/bin/ridl-lsp', realBinaryPath: '/usr/local/bin/ridl-lsp', gopath: '/Users/me/go', brewPrefix: '/usr/local' },
+      'darwin'
+    ),
+    'unknown'
+  );
+});
+
+test('detectInstallSource recognizes a brew binary under an Intel-prefix Cellar', () => {
+  assert.equal(
+    detectInstallSource(
+      {
+        binaryPath: '/usr/local/bin/ridl-lsp',
+        realBinaryPath: '/usr/local/Cellar/ridl-lsp/1.3.0/bin/ridl-lsp',
+        gopath: '/Users/me/go',
+        brewPrefix: '/usr/local'
+      },
+      'darwin'
+    ),
     'brew'
   );
 });
