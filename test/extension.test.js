@@ -124,9 +124,11 @@ function createHarness() {
         warningMessages.push(message);
         return items.includes('Install') ? 'Install' : undefined;
       },
-      async showInformationMessage(message) {
+      showInformationMessage(message) {
         infoMessages.push(message);
-        return undefined;
+        // VS Code resolves a buttonless notification only on dismissal; model it
+        // as never-resolving so an awaited toast can't silently block a flow.
+        return new Promise(() => {});
       },
       async showErrorMessage(message) {
         throw new Error(`unexpected showErrorMessage: ${message}`);
@@ -352,9 +354,12 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
         warnings.push(message);
         return items.includes('Install') ? 'Install' : undefined;
       },
-      async showInformationMessage(message) {
+      showInformationMessage(message) {
         infos.push(message);
-        return undefined;
+        // Model VS Code: a buttonless notification's promise resolves only when
+        // the toast is dismissed. Returning a never-resolving promise ensures any
+        // `await` on it regresses these tests instead of shipping a hang.
+        return new Promise(() => {});
       },
       async showErrorMessage(message) {
         errors.push(message);
@@ -531,9 +536,10 @@ test('installLanguageServer errors when neither brew nor go is available', async
   assert.equal(state.errors.length, 1);
 });
 
-test('a Homebrew install from the prompt starts the server even when which cannot find it yet', async () => {
-  // Regression: a freshly-linked Homebrew binary was resolved via `which`, which
-  // did not see it on the first pass, so the server never started until reload.
+test('a Homebrew install from the prompt starts the server without waiting on the success toast', async () => {
+  // Regression: the install path awaited showInformationMessage, whose promise
+  // (modeled here as never-resolving) only settles on dismissal — so the server
+  // never started until a window reload. The start must not depend on the toast.
   const { extension, state } = createUpdateHarness({
     onPathBinary: '', // findOnPath / `which` returns nothing
     brewPrefix: '/opt/homebrew',
@@ -541,7 +547,9 @@ test('a Homebrew install from the prompt starts the server even when which canno
     quickPick: 'brew'
   });
 
-  await extension.__test.ensureLanguageServerStarted({ subscriptions: [] }, true);
+  const started = extension.__test.ensureLanguageServerStarted({ subscriptions: [] }, true);
+  // Don't hang the suite if the bug returns; the fix resolves `started` promptly.
+  await Promise.race([started, new Promise((resolve) => setTimeout(resolve, 100))]);
 
   assert.deepEqual(state.installerRuns, ['brew install']);
   assert.deepEqual(state.startedPaths, ['/opt/homebrew/bin/ridl-lsp']);

@@ -258,7 +258,7 @@ async function goInstallLanguageServer(isUpdate = false) {
 
   const binaryPath = managedBinaryPath(goEnv.gopath);
   appendOutputLine(`ridl-lsp installed via go install at ${binaryPath}`);
-  await vscode.window.showInformationMessage(`RIDL language server is ready at ${binaryPath}.`);
+  void vscode.window.showInformationMessage(`RIDL language server is ready at ${binaryPath}.`);
   return binaryPath;
 }
 
@@ -332,7 +332,7 @@ async function brewInstallLanguageServer() {
 
   const binaryPath = path.join(prefix, 'bin', brewFormula);
   appendOutputLine(`ridl-lsp installed via Homebrew at ${binaryPath}`);
-  await vscode.window.showInformationMessage('ridl-lsp installed via Homebrew.');
+  void vscode.window.showInformationMessage('ridl-lsp installed via Homebrew.');
   return binaryPath;
 }
 
@@ -400,7 +400,7 @@ async function brewUpgradeLanguageServer(context, serverPath) {
     return false;
   }
 
-  await vscode.window.showInformationMessage('ridl-lsp upgraded via Homebrew.');
+  void vscode.window.showInformationMessage('ridl-lsp upgraded via Homebrew.');
   // An in-place upgrade keeps the same binary path; restart there directly.
   await restartLanguageServerAt(context, serverPath);
   return true;
