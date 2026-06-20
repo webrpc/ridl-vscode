@@ -274,28 +274,31 @@ test('installLanguageServer restarts an existing client by default', async () =>
   assert.equal(state.createdClients[0].startCalls, 1);
 });
 
-function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tmp/go', realpath, quickPick } = {}) {
+function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tmp/go', realpath, quickPick, logLevel = '', configuredPath = '' } = {}) {
   const installerRuns = [];
   const warnings = [];
   const infos = [];
   const errors = [];
   const quickPicks = [];
   const startedPaths = [];
+  const startedEnvs = [];
 
   class FakeLanguageClient {
     constructor(_id, _name, serverOptions) {
       this.command = serverOptions?.command;
+      this.env = serverOptions?.options?.env;
     }
     async start() {
       startedPaths.push(this.command);
+      startedEnvs.push(this.env);
     }
     async stop() {}
     async setTrace() {}
   }
 
   const fakeFs = {
-    existsSync() {
-      return false;
+    existsSync(target) {
+      return Boolean(configuredPath) && target === configuredPath;
     },
     realpathSync(target) {
       return realpath || target;
@@ -387,7 +390,7 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
         return {
           get(key, defaultValue) {
             if (key === 'languageServer.path') {
-              return '';
+              return configuredPath;
             }
             if (key === 'languageServer.promptToInstall') {
               return true;
@@ -397,6 +400,9 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
             }
             if (key === 'languageServer.trace.server') {
               return 'off';
+            }
+            if (key === 'languageServer.logLevel') {
+              return logLevel;
             }
             return defaultValue;
           }
@@ -434,7 +440,7 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
     }
   });
 
-  return { extension, state: { installerRuns, warnings, infos, errors, quickPicks, startedPaths } };
+  return { extension, state: { installerRuns, warnings, infos, errors, quickPicks, startedPaths, startedEnvs } };
 }
 
 test('updateLanguageServer upgrades via brew when the active binary is brew-managed', async () => {
@@ -552,5 +558,47 @@ test('a Homebrew install from the prompt starts the server without waiting on th
   await Promise.race([started, new Promise((resolve) => setTimeout(resolve, 100))]);
 
   assert.deepEqual(state.installerRuns, ['brew install']);
+  assert.deepEqual(state.startedPaths, ['/opt/homebrew/bin/ridl-lsp']);
+});
+
+test('startLanguageServer passes RIDL_LSP_LOG_LEVEL when logLevel is configured', async () => {
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '/opt/homebrew/bin/ridl-lsp',
+    logLevel: 'debug'
+  });
+
+  await extension.__test.ensureLanguageServerStarted({ subscriptions: [] }, false);
+
+  assert.deepEqual(state.startedPaths, ['/opt/homebrew/bin/ridl-lsp']);
+  assert.equal(state.startedEnvs.length, 1);
+  assert.equal(state.startedEnvs[0].RIDL_LSP_LOG_LEVEL, 'debug');
+});
+
+test('startLanguageServer leaves the environment untouched when logLevel is empty', async () => {
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '/opt/homebrew/bin/ridl-lsp',
+    logLevel: ''
+  });
+
+  await extension.__test.ensureLanguageServerStarted({ subscriptions: [] }, false);
+
+  // No override: the server inherits the process environment verbatim.
+  assert.equal(state.startedEnvs[0], process.env);
+});
+
+test('a Homebrew update restarts at the stable bin path, not a versioned keg', async () => {
+  // Regression (COD-001): when the active binary is a configured Cellar keg,
+  // brew upgrade retires it; the restart must use the stable bin symlink.
+  const cellar = '/opt/homebrew/Cellar/ridl-lsp/1.3.0/bin/ridl-lsp';
+  const { extension, state } = createUpdateHarness({
+    configuredPath: cellar,
+    realpath: cellar,
+    brewPrefix: '/opt/homebrew'
+  });
+
+  const ok = await extension.__test.updateLanguageServer({ subscriptions: [] });
+
+  assert.ok(ok);
+  assert.deepEqual(state.installerRuns, ['brew upgrade']);
   assert.deepEqual(state.startedPaths, ['/opt/homebrew/bin/ridl-lsp']);
 });

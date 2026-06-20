@@ -71,6 +71,17 @@ function configuration() {
   return vscode.workspace.getConfiguration('ridl');
 }
 
+// serverEnv layers the configured log level onto the inherited environment, so
+// RIDL_LSP_LOG_LEVEL can be set from VS Code settings without relaunching the
+// editor from a shell. An empty setting leaves the server's own default.
+function serverEnv() {
+  const logLevel = configuration().get('languageServer.logLevel', '').trim();
+  if (!logLevel) {
+    return process.env;
+  }
+  return { ...process.env, RIDL_LSP_LOG_LEVEL: logLevel };
+}
+
 async function ensureLanguageServerStarted(context, promptOnMissing) {
   if (client) {
     return;
@@ -109,7 +120,7 @@ async function startLanguageServer(context, serverPath) {
     command: serverPath,
     transport: TransportKind.stdio,
     options: {
-      env: process.env
+      env: serverEnv()
     }
   };
 
@@ -401,8 +412,13 @@ async function brewUpgradeLanguageServer(context, serverPath) {
   }
 
   void vscode.window.showInformationMessage('ridl-lsp upgraded via Homebrew.');
-  // An in-place upgrade keeps the same binary path; restart there directly.
-  await restartLanguageServerAt(context, serverPath);
+  // Restart at the stable Homebrew bin symlink, not the pre-upgrade path: that
+  // path may be a versioned Cellar keg (e.g. a configured languageServer.path)
+  // that `brew upgrade` just retired. Fall back to serverPath if the prefix
+  // lookup fails.
+  const prefix = await readBrewPrefix();
+  const binaryPath = prefix ? path.join(prefix, 'bin', brewFormula) : serverPath;
+  await restartLanguageServerAt(context, binaryPath);
   return true;
 }
 
