@@ -71,6 +71,17 @@ function configuration() {
   return vscode.workspace.getConfiguration('ridl');
 }
 
+// serverEnv layers the configured log level onto the inherited environment, so
+// RIDL_LSP_LOG_LEVEL can be set from VS Code settings without relaunching the
+// editor from a shell. An empty setting leaves the server's own default.
+function serverEnv() {
+  const logLevel = configuration().get('languageServer.logLevel', '').trim();
+  if (!logLevel) {
+    return process.env;
+  }
+  return { ...process.env, RIDL_LSP_LOG_LEVEL: logLevel };
+}
+
 async function ensureLanguageServerStarted(context, promptOnMissing) {
   if (client) {
     return;
@@ -109,7 +120,7 @@ async function startLanguageServer(context, serverPath) {
     command: serverPath,
     transport: TransportKind.stdio,
     options: {
-      env: process.env
+      env: serverEnv()
     }
   };
 

@@ -111,6 +111,25 @@
           "default": true,
           "markdownDescription": "Prompt to install `ridl-lsp` (via Homebrew or `go install`) when RIDL files are opened and no binary is found."
         },
+        "ridl.languageServer.logLevel": {
+          "type": "string",
+          "enum": [
+            "",
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
+          "enumDescriptions": [
+            "Use the server's default level (info).",
+            "Per-request logs (method, latency) plus everything below.",
+            "Default operational logging.",
+            "Warnings and errors only.",
+            "Errors only."
+          ],
+          "default": "",
+          "markdownDescription": "Sets `RIDL_LSP_LOG_LEVEL` for the `ridl-lsp` server process. Use `debug` to log every request's method and latency to the **RIDL Language Server** output channel. Leave empty to use the server default."
+        },
         "ridl.languageServer.trace.server": {
           "type": "string",
           "enum": [
