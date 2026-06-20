@@ -109,7 +109,7 @@
         "ridl.languageServer.promptToInstall": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Prompt to install `ridl-lsp` into GOPATH/bin when RIDL files are opened and no binary is found."
+          "markdownDescription": "Prompt to install `ridl-lsp` (via Homebrew or `go install`) when RIDL files are opened and no binary is found."
         },
         "ridl.languageServer.trace.server": {
           "type": "string",

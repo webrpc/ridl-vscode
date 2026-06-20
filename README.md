@@ -7,12 +7,12 @@ RIDL adds first-class editor support for `.ridl` files used by webrpc schemas.
 - syntax highlighting tailored for RIDL declarations, annotations, metadata, fields, and enum members
 - language server integration powered by `ridl-lsp`
 - go to definition, type definition, find references, rename, hover, code lens, and document links
-- commands to install or update `ridl-lsp` into `$GOPATH/bin`
+- commands to install `ridl-lsp` (choosing Homebrew or Go when both are available) and to update it in place via whichever tool installed it
 
 ## Requirements
 
 - VS Code `1.90+`
-- Go installed locally if you want the extension to install or update `ridl-lsp` for you
+- Homebrew or Go installed locally if you want the extension to install or update `ridl-lsp` for you
 
 ## Install
 
@@ -29,12 +29,17 @@ Install **RIDL** from the Visual Studio Marketplace:
 
 ## Getting Started
 
-Open any `.ridl` file. If `ridl-lsp` is not available in `$GOPATH/bin`, the extension can prompt to install it.
+Open any `.ridl` file. The extension uses the first `ridl-lsp` it finds: the
+`ridl.languageServer.path` setting, then one on your `PATH` (e.g. a Homebrew
+install), then `$GOPATH/bin`. If none is found, it can prompt to install one.
 
 You can also manage the language server manually from the Command Palette:
 
-- `RIDL: Install Language Server`
-- `RIDL: Update Language Server`
+- `RIDL: Install Language Server` — installs via Homebrew or `go install`; when
+  both are available it asks which to use, otherwise it uses the one you have.
+- `RIDL: Update Language Server` — updates the active binary using the tool it
+  was installed with (`brew upgrade` for a Homebrew install, `go install` for a
+  `$GOPATH/bin` one); it won't install a second copy from the other source.
 - `RIDL: Restart Language Server`
 
 ## Install From Repo
@@ -80,11 +85,19 @@ To install from a different repo URL, set `RIDL_VSCODE_REPO` before running the 
 - `ridl.languageServer.promptToInstall`: whether to prompt to install `ridl-lsp` when opening RIDL files
 - `ridl.languageServer.trace.server`: trace level forwarded to the language client
 
-## Managed Binary Location
+## Binary Resolution
 
-The extension manages `ridl-lsp` in `$GOPATH/bin`, similar to common Go tooling workflows.
+The extension resolves `ridl-lsp` in this order:
 
-If you want to override that, set `ridl.languageServer.path` to an explicit binary path.
+1. `ridl.languageServer.path`, if set
+2. the first `ridl-lsp` on your `PATH` (e.g. a Homebrew install)
+3. `$GOPATH/bin/ridl-lsp`
+
+`RIDL: Update Language Server` updates the resolved binary using the tool it was
+installed with, so a Homebrew install is updated with `brew upgrade` and a
+`$GOPATH/bin` install with `go install` — it never drops a second copy from the
+other source. A binary that is neither (e.g. a custom `ridl.languageServer.path`)
+is left for you to update.
 
 ## Development
 
