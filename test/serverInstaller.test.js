@@ -6,7 +6,8 @@ const {
   executableName,
   findOnPath,
   firstGopathEntry,
-  managedBinaryPath
+  managedBinaryPath,
+  detectInstallSource
 } = require('../serverInstaller');
 
 test('executableName uses platform specific suffix', () => {
@@ -38,4 +39,43 @@ test('findOnPath strips CR and returns the first match on Windows', () => {
   } finally {
     childProcess.execFileSync = original;
   }
+});
+
+test('detectInstallSource recognizes a go-installed binary', () => {
+  assert.equal(
+    detectInstallSource({ binaryPath: '/Users/me/go/bin/ridl-lsp', gopath: '/Users/me/go', brewPrefix: '/opt/homebrew' }, 'darwin'),
+    'go'
+  );
+});
+
+test('detectInstallSource recognizes a brew binary under the prefix', () => {
+  assert.equal(
+    detectInstallSource({ binaryPath: '/opt/homebrew/bin/ridl-lsp', gopath: '/Users/me/go', brewPrefix: '/opt/homebrew' }, 'darwin'),
+    'brew'
+  );
+});
+
+test('detectInstallSource recognizes a brew binary via the Cellar realpath', () => {
+  assert.equal(
+    detectInstallSource(
+      {
+        binaryPath: '/opt/homebrew/bin/ridl-lsp',
+        realBinaryPath: '/opt/homebrew/Cellar/ridl-lsp/1.3.0/bin/ridl-lsp',
+        gopath: '/Users/me/go'
+      },
+      'darwin'
+    ),
+    'brew'
+  );
+});
+
+test('detectInstallSource returns unknown for an unmanaged path', () => {
+  assert.equal(
+    detectInstallSource({ binaryPath: '/usr/local/custom/ridl-lsp', gopath: '/Users/me/go', brewPrefix: '/opt/homebrew' }, 'darwin'),
+    'unknown'
+  );
+});
+
+test('detectInstallSource returns unknown without a binary path', () => {
+  assert.equal(detectInstallSource({ gopath: '/Users/me/go', brewPrefix: '/opt/homebrew' }, 'darwin'), 'unknown');
 });

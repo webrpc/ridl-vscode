@@ -271,3 +271,191 @@ test('installManagedLanguageServer still restarts an existing client by default'
   assert.equal(state.createdClients.length, 1);
   assert.equal(state.createdClients[0].startCalls, 1);
 });
+
+function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tmp/go', realpath } = {}) {
+  const installerRuns = [];
+  const warnings = [];
+  const infos = [];
+
+  class FakeLanguageClient {
+    async start() {}
+    async stop() {}
+    async setTrace() {}
+  }
+
+  const fakeFs = {
+    existsSync() {
+      return false;
+    },
+    realpathSync(target) {
+      return realpath || target;
+    }
+  };
+
+  const fakeChildProcess = {
+    execFileSync() {
+      if (!onPathBinary) {
+        throw new Error('not found');
+      }
+      return `${onPathBinary}\n`;
+    },
+    execFile(command, args, options, callback) {
+      if (typeof options === 'function') {
+        callback = options;
+      }
+      if (command === 'go' && args[0] === 'env') {
+        callback(null, `${gopath}\n`, '');
+        return;
+      }
+      if (command === 'go' && args[0] === 'install') {
+        installerRuns.push('go');
+        callback(null, '', '');
+        return;
+      }
+      if (command === 'brew' && args[0] === '--prefix') {
+        if (!brewPrefix) {
+          callback(new Error('brew not found'));
+          return;
+        }
+        callback(null, `${brewPrefix}\n`, '');
+        return;
+      }
+      if (command === 'brew' && args[0] === 'upgrade') {
+        installerRuns.push('brew');
+        callback(null, '', '');
+        return;
+      }
+      callback(new Error(`unexpected command ${command} ${args.join(' ')}`));
+    }
+  };
+
+  const fakeVscode = {
+    ProgressLocation: { Notification: 'notification' },
+    window: {
+      createOutputChannel() {
+        return { appendLine() {}, dispose() {} };
+      },
+      async showWarningMessage(message) {
+        warnings.push(message);
+        return undefined;
+      },
+      async showInformationMessage(message) {
+        infos.push(message);
+        return undefined;
+      },
+      async showErrorMessage(message) {
+        throw new Error(`unexpected showErrorMessage: ${message}`);
+      },
+      async withProgress(_options, task) {
+        return task();
+      }
+    },
+    commands: {
+      registerCommand() {
+        return { dispose() {} };
+      }
+    },
+    workspace: {
+      textDocuments: [],
+      getConfiguration() {
+        return {
+          get(key, defaultValue) {
+            if (key === 'languageServer.path') {
+              return '';
+            }
+            if (key === 'languageServer.promptToInstall') {
+              return true;
+            }
+            if (key === 'languageServer.importPath') {
+              return defaultValue;
+            }
+            if (key === 'languageServer.trace.server') {
+              return 'off';
+            }
+            return defaultValue;
+          }
+        };
+      },
+      createFileSystemWatcher() {
+        return { dispose() {} };
+      },
+      onDidOpenTextDocument() {
+        return { dispose() {} };
+      }
+    }
+  };
+
+  const extension = withMocks(
+    { vscode: fakeVscode, fs: fakeFs, child_process: fakeChildProcess },
+    () => {
+      // Evict serverInstaller too so findOnPath re-binds to this harness's
+      // child_process mock instead of a cached binding from an earlier test.
+      delete require.cache[require.resolve('../serverInstaller')];
+      delete require.cache[require.resolve('../extension')];
+      return require('../extension');
+    }
+  );
+
+  extension.__test.resetState();
+  extension.__test.setClientModuleForTests({
+    LanguageClient: FakeLanguageClient,
+    TransportKind: { stdio: 'stdio' },
+    Trace: {
+      Off: 'off',
+      fromString(value) {
+        return value;
+      }
+    }
+  });
+
+  return { extension, state: { installerRuns, warnings, infos } };
+}
+
+test('updateLanguageServer upgrades via brew when the active binary is brew-managed', async () => {
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '/opt/homebrew/bin/ridl-lsp',
+    brewPrefix: '/opt/homebrew'
+  });
+
+  const ok = await extension.__test.updateLanguageServer({ subscriptions: [] });
+
+  assert.equal(ok, true);
+  assert.deepEqual(state.installerRuns, ['brew']);
+});
+
+test('updateLanguageServer uses go install when the active binary is in GOPATH', async () => {
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '/tmp/go/bin/ridl-lsp',
+    brewPrefix: '/opt/homebrew',
+    gopath: '/tmp/go'
+  });
+
+  const ok = await extension.__test.updateLanguageServer({ subscriptions: [] });
+
+  assert.equal(ok, true);
+  assert.deepEqual(state.installerRuns, ['go']);
+});
+
+test('updateLanguageServer refuses to cross-install for an unmanaged binary', async () => {
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '/usr/local/custom/ridl-lsp',
+    brewPrefix: '/opt/homebrew',
+    gopath: '/tmp/go'
+  });
+
+  const ok = await extension.__test.updateLanguageServer({ subscriptions: [] });
+
+  assert.equal(ok, false);
+  assert.deepEqual(state.installerRuns, []);
+  assert.equal(state.warnings.length, 1);
+});
+
+test('updateLanguageServer warns when no binary is installed', async () => {
+  const { extension, state } = createUpdateHarness({ onPathBinary: '', gopath: '/tmp/go' });
+
+  const ok = await extension.__test.updateLanguageServer({ subscriptions: [] });
+
+  assert.equal(ok, false);
+  assert.deepEqual(state.installerRuns, []);
+  assert.equal(state.warnings.length, 1);
+});

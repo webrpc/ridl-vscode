@@ -3,7 +3,8 @@ const fs = require('fs');
 const vscode = require('vscode');
 const {
   findOnPath,
-  managedBinaryPath
+  managedBinaryPath,
+  detectInstallSource
 } = require('./serverInstaller');
 const {
   normalizeShowReferencesArguments
@@ -32,7 +33,7 @@ async function activate(context) {
     outputChannel,
     traceOutputChannel,
     vscode.commands.registerCommand(commandInstall, () => installManagedLanguageServer(context, false)),
-    vscode.commands.registerCommand(commandUpdate, () => installManagedLanguageServer(context, true)),
+    vscode.commands.registerCommand(commandUpdate, () => updateLanguageServer(context)),
     vscode.commands.registerCommand(commandRestart, () => restartLanguageServer(context)),
     vscode.commands.registerCommand(commandShowReferences, (...args) => showReferences(...args))
   );
@@ -246,6 +247,61 @@ async function installManagedLanguageServer(context, isUpdate, options = {}) {
   return true;
 }
 
+// updateLanguageServer updates whatever binary the editor actually runs, using the
+// tool it was installed with. Updating via the other source would drop a second
+// copy the PATH binary shadows (e.g. a go-install that never replaces a brew
+// install), so for a binary that is neither brew- nor go-managed we refuse rather
+// than cross-install.
+async function updateLanguageServer(context) {
+  const serverPath = await resolveLanguageServerPath(context, false);
+  if (!serverPath) {
+    void vscode.window.showWarningMessage(
+      'ridl-lsp is not installed. Run "RIDL: Install Language Server", or install it with: brew install webrpc/tap/ridl-lsp'
+    );
+    return false;
+  }
+
+  const source = await detectActiveSource(serverPath);
+  appendOutputLine(`Updating ridl-lsp at ${serverPath} (install source: ${source})`);
+
+  if (source === 'go') {
+    return installManagedLanguageServer(context, true);
+  }
+
+  if (source === 'brew') {
+    return brewUpgradeLanguageServer(context);
+  }
+
+  void vscode.window.showWarningMessage(
+    `ridl-lsp at ${serverPath} was not installed via Homebrew or go install — update it with the tool you installed it with.`
+  );
+  return false;
+}
+
+async function detectActiveSource(serverPath) {
+  const [goEnv, brewPrefix] = await Promise.all([readGoEnv(), readBrewPrefix()]);
+  let realBinaryPath = serverPath;
+  try {
+    realBinaryPath = fs.realpathSync(serverPath);
+  } catch {
+    // Fall back to the unresolved path; detection still handles it.
+  }
+  return detectInstallSource({ binaryPath: serverPath, realBinaryPath, gopath: goEnv.gopath, brewPrefix });
+}
+
+async function brewUpgradeLanguageServer(context) {
+  const label = 'Updating ridl-lsp via brew upgrade';
+  appendOutputLine(label);
+  const ok = await runWithProgress(label, 'brew', ['upgrade', 'ridl-lsp']);
+  if (!ok) {
+    return false;
+  }
+
+  await vscode.window.showInformationMessage('ridl-lsp upgraded via Homebrew.');
+  await restartLanguageServer(context);
+  return true;
+}
+
 async function readGoEnv() {
   try {
     const output = await execFile('go', ['env', 'GOPATH']);
@@ -255,7 +311,26 @@ async function readGoEnv() {
   }
 }
 
+async function readBrewPrefix() {
+  try {
+    const output = await execFile('brew', ['--prefix']);
+    return output.trim();
+  } catch (error) {
+    return '';
+  }
+}
+
 async function runGoInstall(title, args, cwd) {
+  return runWithProgress(title, 'go', args, {
+    cwd,
+    env: {
+      ...process.env,
+      GOBIN: ''
+    }
+  });
+}
+
+async function runWithProgress(title, command, args, options = {}) {
   return vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
@@ -264,14 +339,7 @@ async function runGoInstall(title, args, cwd) {
     },
     async () => {
       try {
-        await execFile('go', args, {
-          cwd,
-          timeout: 120_000,
-          env: {
-            ...process.env,
-            GOBIN: ''
-          }
-        });
+        await execFile(command, args, { timeout: 120_000, ...options });
         return true;
       } catch (error) {
         const message = error && error.message ? error.message : String(error);
@@ -308,6 +376,7 @@ module.exports = {
   __test: {
     ensureLanguageServerStarted,
     installManagedLanguageServer,
+    updateLanguageServer,
     restartLanguageServer,
     resetState() {
       client = undefined;
