@@ -412,8 +412,13 @@ async function brewUpgradeLanguageServer(context, serverPath) {
   }
 
   void vscode.window.showInformationMessage('ridl-lsp upgraded via Homebrew.');
-  // An in-place upgrade keeps the same binary path; restart there directly.
-  await restartLanguageServerAt(context, serverPath);
+  // Restart at the stable Homebrew bin symlink, not the pre-upgrade path: that
+  // path may be a versioned Cellar keg (e.g. a configured languageServer.path)
+  // that `brew upgrade` just retired. Fall back to serverPath if the prefix
+  // lookup fails.
+  const prefix = await readBrewPrefix();
+  const binaryPath = prefix ? path.join(prefix, 'bin', brewFormula) : serverPath;
+  await restartLanguageServerAt(context, binaryPath);
   return true;
 }
 
