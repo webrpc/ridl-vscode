@@ -124,9 +124,11 @@ function createHarness() {
         warningMessages.push(message);
         return items.includes('Install') ? 'Install' : undefined;
       },
-      async showInformationMessage(message) {
+      showInformationMessage(message) {
         infoMessages.push(message);
-        return undefined;
+        // VS Code resolves a buttonless notification only on dismissal; model it
+        // as never-resolving so an awaited toast can't silently block a flow.
+        return new Promise(() => {});
       },
       async showErrorMessage(message) {
         throw new Error(`unexpected showErrorMessage: ${message}`);
@@ -252,7 +254,7 @@ test('ensureLanguageServerStarted installs and starts once when prompted on firs
   assert.equal(context.subscriptions.length, 1);
 });
 
-test('installManagedLanguageServer still restarts an existing client by default', async () => {
+test('installLanguageServer restarts an existing client by default', async () => {
   const { extension, state } = createHarness();
   const context = { subscriptions: [] };
   const existingClient = {
@@ -264,9 +266,9 @@ test('installManagedLanguageServer still restarts an existing client by default'
 
   extension.__test.setClientForTests(existingClient);
 
-  const installed = await extension.__test.installManagedLanguageServer(context, false);
+  const installed = await extension.__test.installLanguageServer(context);
 
-  assert.equal(installed, true);
+  assert.ok(installed);
   assert.equal(existingClient.stopCalls, 1);
   assert.equal(state.createdClients.length, 1);
   assert.equal(state.createdClients[0].startCalls, 1);
@@ -278,9 +280,15 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
   const infos = [];
   const errors = [];
   const quickPicks = [];
+  const startedPaths = [];
 
   class FakeLanguageClient {
-    async start() {}
+    constructor(_id, _name, serverOptions) {
+      this.command = serverOptions?.command;
+    }
+    async start() {
+      startedPaths.push(this.command);
+    }
     async stop() {}
     async setTrace() {}
   }
@@ -342,13 +350,16 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
       createOutputChannel() {
         return { appendLine() {}, dispose() {} };
       },
-      async showWarningMessage(message) {
+      async showWarningMessage(message, ...items) {
         warnings.push(message);
-        return undefined;
+        return items.includes('Install') ? 'Install' : undefined;
       },
-      async showInformationMessage(message) {
+      showInformationMessage(message) {
         infos.push(message);
-        return undefined;
+        // Model VS Code: a buttonless notification's promise resolves only when
+        // the toast is dismissed. Returning a never-resolving promise ensures any
+        // `await` on it regresses these tests instead of shipping a hang.
+        return new Promise(() => {});
       },
       async showErrorMessage(message) {
         errors.push(message);
@@ -423,7 +434,7 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
     }
   });
 
-  return { extension, state: { installerRuns, warnings, infos, errors, quickPicks } };
+  return { extension, state: { installerRuns, warnings, infos, errors, quickPicks, startedPaths } };
 }
 
 test('updateLanguageServer upgrades via brew when the active binary is brew-managed', async () => {
@@ -481,7 +492,7 @@ test('installLanguageServer asks which source when both brew and go are availabl
 
   const ok = await extension.__test.installLanguageServer({ subscriptions: [] });
 
-  assert.equal(ok, true);
+  assert.ok(ok);
   assert.equal(state.quickPicks.length, 1);
   assert.deepEqual(state.installerRuns, ['brew install']);
 });
@@ -491,7 +502,7 @@ test('installLanguageServer honors a go pick when both are available', async () 
 
   const ok = await extension.__test.installLanguageServer({ subscriptions: [] });
 
-  assert.equal(ok, true);
+  assert.ok(ok);
   assert.deepEqual(state.installerRuns, ['go install']);
 });
 
@@ -500,7 +511,7 @@ test('installLanguageServer aborts when the source pick is dismissed', async () 
 
   const ok = await extension.__test.installLanguageServer({ subscriptions: [] });
 
-  assert.equal(ok, false);
+  assert.ok(!ok);
   assert.equal(state.quickPicks.length, 1);
   assert.deepEqual(state.installerRuns, []);
 });
@@ -510,7 +521,7 @@ test('installLanguageServer uses the only available source without asking', asyn
 
   const ok = await extension.__test.installLanguageServer({ subscriptions: [] });
 
-  assert.equal(ok, true);
+  assert.ok(ok);
   assert.equal(state.quickPicks.length, 0);
   assert.deepEqual(state.installerRuns, ['brew install']);
 });
@@ -520,7 +531,26 @@ test('installLanguageServer errors when neither brew nor go is available', async
 
   const ok = await extension.__test.installLanguageServer({ subscriptions: [] });
 
-  assert.equal(ok, false);
+  assert.ok(!ok);
   assert.deepEqual(state.installerRuns, []);
   assert.equal(state.errors.length, 1);
+});
+
+test('a Homebrew install from the prompt starts the server without waiting on the success toast', async () => {
+  // Regression: the install path awaited showInformationMessage, whose promise
+  // (modeled here as never-resolving) only settles on dismissal — so the server
+  // never started until a window reload. The start must not depend on the toast.
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '', // findOnPath / `which` returns nothing
+    brewPrefix: '/opt/homebrew',
+    gopath: '/tmp/go',
+    quickPick: 'brew'
+  });
+
+  const started = extension.__test.ensureLanguageServerStarted({ subscriptions: [] }, true);
+  // Don't hang the suite if the bug returns; the fix resolves `started` promptly.
+  await Promise.race([started, new Promise((resolve) => setTimeout(resolve, 100))]);
+
+  assert.deepEqual(state.installerRuns, ['brew install']);
+  assert.deepEqual(state.startedPaths, ['/opt/homebrew/bin/ridl-lsp']);
 });
