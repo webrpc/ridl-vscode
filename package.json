@@ -111,6 +111,11 @@
           "default": true,
           "markdownDescription": "Prompt to install `ridl-lsp` (via Homebrew or `go install`) when RIDL files are opened and no binary is found."
         },
+        "ridl.languageServer.promptToUpdate": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Prompt to update `ridl-lsp` when a newer recommended version is available."
+        },
         "ridl.languageServer.logLevel": {
           "type": "string",
           "enum": [

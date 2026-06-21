@@ -22,8 +22,16 @@ const brewInstallTarget = 'webrpc/tap/ridl-lsp';
 const outputChannelName = 'RIDL Language Server';
 const traceOutputChannelName = 'RIDL Language Server Trace';
 
+// Bump on notable ridl-lsp releases this extension has been validated against.
+// The update prompt nudges users whose installed server is older than this.
+const recommendedServerVersion = '1.5.0';
+const dismissedServerUpdateKey = 'ridl.dismissedServerUpdateVersion';
+
 let client;
 let clientModule;
+// Prompt to update at most once per session — startLanguageServer can run again
+// on restart/re-open, and the post-update restart would otherwise re-trigger it.
+let serverUpdatePrompted = false;
 let outputChannel;
 let traceOutputChannel;
 let startingPromise;
@@ -155,6 +163,10 @@ async function startLanguageServer(context, serverPath) {
   }
 
   await client.setTrace(trace);
+
+  // Fire-and-forget: nudge if the running server is behind the recommended
+  // version. Never block startup on this.
+  void maybePromptServerUpdate(context, serverPath).catch(() => {});
 }
 
 async function restartLanguageServer(context) {
@@ -508,6 +520,45 @@ async function getServerVersion(serverPath) {
   }
 }
 
+// maybePromptServerUpdate shows a one-time, non-blocking toast when the installed
+// server is older than recommendedServerVersion, offering to run the update flow.
+// The whole body is wrapped so it NEVER rejects: it runs fire-and-forget from
+// startup, and showInformationMessage/updateLanguageServer/globalState.update can
+// reject — an unhandled rejection there must never disrupt activation.
+async function maybePromptServerUpdate(context, serverPath) {
+  try {
+    if (serverUpdatePrompted || !configuration().get('languageServer.promptToUpdate', true)) {
+      return;
+    }
+    const installed = await getServerVersion(serverPath);
+    if (!installed || compareVersions(installed, recommendedServerVersion) >= 0) {
+      return;
+    }
+    const dismissed = context.globalState.get(dismissedServerUpdateKey);
+    if (dismissed && compareVersions(recommendedServerVersion, dismissed) <= 0) {
+      return;
+    }
+    serverUpdatePrompted = true;
+    const updateLabel = 'Update';
+    const dismissLabel = `Don't ask for ${recommendedServerVersion}`;
+    const choice = await vscode.window.showInformationMessage(
+      `ridl-lsp ${recommendedServerVersion} is available (you have ${installed}).`,
+      updateLabel,
+      'Later',
+      dismissLabel
+    );
+    if (choice === updateLabel) {
+      await updateLanguageServer(context);
+      return;
+    }
+    if (choice === dismissLabel) {
+      await context.globalState.update(dismissedServerUpdateKey, recommendedServerVersion);
+    }
+  } catch {
+    // Silent by design: an update nudge must never affect startup.
+  }
+}
+
 function execFile(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     childProcess.execFile(command, args, options, (error, stdout, stderr) => {
@@ -531,12 +582,14 @@ module.exports = {
     restartLanguageServer,
     compareVersions,
     getServerVersion,
+    maybePromptServerUpdate,
     resetState() {
       client = undefined;
       clientModule = undefined;
       outputChannel = undefined;
       traceOutputChannel = undefined;
       startingPromise = undefined;
+      serverUpdatePrompted = false;
     },
     setClientModuleForTests(module) {
       clientModule = module;
