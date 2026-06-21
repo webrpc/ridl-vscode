@@ -784,6 +784,18 @@ test('maybePromptServerUpdate never rejects when globalState.update fails', asyn
   await extension.__test.maybePromptServerUpdate(context, '/bin/ridl-lsp');
 });
 
+test('maybePromptServerUpdate prompts at most once for concurrent outdated checks', async () => {
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '/bin/ridl-lsp',
+    serverVersion: 'ridl-lsp v1.4.0'
+  });
+  const context = { subscriptions: [], globalState: fakeGlobalState() };
+  const first = extension.__test.maybePromptServerUpdate(context, '/bin/ridl-lsp');
+  const second = extension.__test.maybePromptServerUpdate(context, '/bin/ridl-lsp');
+  await Promise.all([first, second]);
+  assert.equal(state.infos.length, 1);
+});
+
 test('starting the server prompts for an outdated ridl-lsp without blocking startup', async () => {
   const { extension, state } = createUpdateHarness({
     onPathBinary: '/opt/homebrew/bin/ridl-lsp',

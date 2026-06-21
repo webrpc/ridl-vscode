@@ -538,6 +538,12 @@ async function maybePromptServerUpdate(context, serverPath) {
     if (dismissed && compareVersions(recommendedServerVersion, dismissed) <= 0) {
       return;
     }
+    // Claim the once-per-session slot atomically (no await between the check and
+    // the set), so two checks that both passed the early guard before either
+    // resolved its version probe can't both reach the toast.
+    if (serverUpdatePrompted) {
+      return;
+    }
     serverUpdatePrompted = true;
     const updateLabel = 'Update';
     const dismissLabel = `Don't ask for ${recommendedServerVersion}`;
