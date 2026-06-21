@@ -477,6 +477,37 @@ function appendOutputLine(message) {
   }
 }
 
+// compareVersions compares two MAJOR.MINOR.PATCH strings numerically (so
+// 1.10.0 > 1.9.0), tolerating a leading "v" and any -prerelease/+build suffix.
+// Unparseable input compares as 0.0.0.
+function compareVersions(a, b) {
+  const parse = (v) => {
+    const m = /(\d+)\.(\d+)\.(\d+)/.exec(String(v));
+    return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : [0, 0, 0];
+  };
+  const pa = parse(a);
+  const pb = parse(b);
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] !== pb[i]) {
+      return pa[i] < pb[i] ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
+// getServerVersion runs `ridl-lsp --version` and returns the parsed x.y.z, or
+// null on spawn failure / unparseable output (e.g. a dev build) — null means
+// "skip the update prompt" so dev/unknown builds are never nagged.
+async function getServerVersion(serverPath) {
+  try {
+    const stdout = await execFile(serverPath, ['--version'], { timeout: 5_000 });
+    const match = /(\d+)\.(\d+)\.(\d+)/.exec(stdout);
+    return match ? `${match[1]}.${match[2]}.${match[3]}` : null;
+  } catch {
+    return null;
+  }
+}
+
 function execFile(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     childProcess.execFile(command, args, options, (error, stdout, stderr) => {
@@ -498,6 +529,8 @@ module.exports = {
     installLanguageServer,
     updateLanguageServer,
     restartLanguageServer,
+    compareVersions,
+    getServerVersion,
     resetState() {
       client = undefined;
       clientModule = undefined;
