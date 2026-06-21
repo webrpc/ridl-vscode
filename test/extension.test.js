@@ -274,10 +274,11 @@ test('installLanguageServer restarts an existing client by default', async () =>
   assert.equal(state.createdClients[0].startCalls, 1);
 });
 
-function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tmp/go', realpath, quickPick, logLevel = '', configuredPath = '' } = {}) {
+function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tmp/go', realpath, quickPick, logLevel = '', configuredPath = '', serverVersion = '', infoChoice = undefined, promptToUpdate = true } = {}) {
   const installerRuns = [];
   const warnings = [];
   const infos = [];
+  const infoButtons = [];
   const errors = [];
   const quickPicks = [];
   const startedPaths = [];
@@ -343,6 +344,14 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
         callback(null, '', '');
         return;
       }
+      if (command === onPathBinary && args[0] === '--version') {
+        if (!serverVersion) {
+          callback(new Error('no --version configured'));
+          return;
+        }
+        callback(null, `${serverVersion}\n`, '');
+        return;
+      }
       callback(new Error(`unexpected command ${command} ${args.join(' ')}`));
     }
   };
@@ -357,11 +366,16 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
         warnings.push(message);
         return items.includes('Install') ? 'Install' : undefined;
       },
-      showInformationMessage(message) {
+      showInformationMessage(message, ...items) {
         infos.push(message);
-        // Model VS Code: a buttonless notification's promise resolves only when
-        // the toast is dismissed. Returning a never-resolving promise ensures any
-        // `await` on it regresses these tests instead of shipping a hang.
+        infoButtons.push(items);
+        // A BUTTONED prompt resolves to the configured choice. A BUTTONLESS
+        // notification's promise resolves only on dismissal — model it as
+        // never-resolving so an `await` on it regresses these tests (the v0.2.1
+        // toast-await bug class) instead of shipping a hang.
+        if (items.length > 0) {
+          return Promise.resolve(infoChoice);
+        }
         return new Promise(() => {});
       },
       async showErrorMessage(message) {
@@ -394,6 +408,9 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
             }
             if (key === 'languageServer.promptToInstall') {
               return true;
+            }
+            if (key === 'languageServer.promptToUpdate') {
+              return promptToUpdate;
             }
             if (key === 'languageServer.importPath') {
               return defaultValue;
@@ -440,7 +457,7 @@ function createUpdateHarness({ onPathBinary = '', brewPrefix = '', gopath = '/tm
     }
   });
 
-  return { extension, state: { installerRuns, warnings, infos, errors, quickPicks, startedPaths, startedEnvs } };
+  return { extension, state: { installerRuns, warnings, infos, infoButtons, errors, quickPicks, startedPaths, startedEnvs } };
 }
 
 test('updateLanguageServer upgrades via brew when the active binary is brew-managed', async () => {
@@ -601,4 +618,193 @@ test('a Homebrew update restarts at the stable bin path, not a versioned keg', a
   assert.ok(ok);
   assert.deepEqual(state.installerRuns, ['brew upgrade']);
   assert.deepEqual(state.startedPaths, ['/opt/homebrew/bin/ridl-lsp']);
+});
+
+test('compareVersions orders semver numerically', () => {
+  const { extension } = createUpdateHarness({});
+  const { compareVersions } = extension.__test;
+  assert.equal(compareVersions('1.5.0', '1.5.0'), 0);
+  assert.equal(compareVersions('1.4.0', '1.5.0'), -1);
+  assert.equal(compareVersions('1.5.1', '1.5.0'), 1);
+  assert.equal(compareVersions('2.0.0', '1.9.9'), 1);
+  assert.equal(compareVersions('1.10.0', '1.9.0'), 1); // numeric, not lexical
+  assert.equal(compareVersions('v1.5.0', '1.5.0'), 0); // leading v
+  assert.equal(compareVersions('1.5.0-dev', '1.5.0'), 0); // suffix stripped
+  assert.equal(compareVersions('garbage', '0.0.0'), 0); // unparseable -> 0.0.0
+});
+
+test('getServerVersion parses --version output', async () => {
+  const { extension } = createUpdateHarness({
+    onPathBinary: '/usr/local/bin/ridl-lsp',
+    serverVersion: 'ridl-lsp v1.5.0'
+  });
+  const v = await extension.__test.getServerVersion('/usr/local/bin/ridl-lsp');
+  assert.equal(v, '1.5.0');
+});
+
+test('getServerVersion returns null on spawn failure', async () => {
+  const { extension } = createUpdateHarness({
+    onPathBinary: '/usr/local/bin/ridl-lsp',
+    serverVersion: 'ridl-lsp v1.5.0'
+  });
+  // A different path than onPathBinary makes the harness execFile error out.
+  const v = await extension.__test.getServerVersion('/nope/ridl-lsp');
+  assert.equal(v, null);
+});
+
+test('getServerVersion returns null on unparseable output', async () => {
+  const { extension } = createUpdateHarness({
+    onPathBinary: '/usr/local/bin/ridl-lsp',
+    serverVersion: 'ridl-lsp dev'
+  });
+  const v = await extension.__test.getServerVersion('/usr/local/bin/ridl-lsp');
+  assert.equal(v, null);
+});
+
+function fakeGlobalState(initial = {}) {
+  const store = { ...initial };
+  return {
+    get: (key) => store[key],
+    update: (key, value) => { store[key] = value; return Promise.resolve(); },
+    _store: store
+  };
+}
+
+// flushAsync drains the microtask + immediate queues so a fire-and-forget
+// maybePromptServerUpdate (two awaits) settles before assertions.
+function flushAsync() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+test('maybePromptServerUpdate prompts when the installed server is older', async () => {
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '/bin/ridl-lsp',
+    serverVersion: 'ridl-lsp v1.4.0'
+  });
+  const context = { subscriptions: [], globalState: fakeGlobalState() };
+  await extension.__test.maybePromptServerUpdate(context, '/bin/ridl-lsp');
+  assert.equal(state.infos.length, 1);
+  assert.match(state.infos[0], /1\.5\.0 is available .*you have 1\.4\.0/);
+  assert.deepEqual(state.infoButtons[0], ['Update', 'Later', "Don't ask for 1.5.0"]);
+});
+
+test('maybePromptServerUpdate does nothing when promptToUpdate is off', async () => {
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '/bin/ridl-lsp',
+    serverVersion: 'ridl-lsp v1.4.0',
+    promptToUpdate: false
+  });
+  const context = { subscriptions: [], globalState: fakeGlobalState() };
+  await extension.__test.maybePromptServerUpdate(context, '/bin/ridl-lsp');
+  assert.equal(state.infos.length, 0);
+});
+
+test('maybePromptServerUpdate does nothing when the server is current', async () => {
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '/bin/ridl-lsp',
+    serverVersion: 'ridl-lsp v1.5.0'
+  });
+  const context = { subscriptions: [], globalState: fakeGlobalState() };
+  await extension.__test.maybePromptServerUpdate(context, '/bin/ridl-lsp');
+  assert.equal(state.infos.length, 0);
+});
+
+test('maybePromptServerUpdate respects a dismissal for the recommended version', async () => {
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '/bin/ridl-lsp',
+    serverVersion: 'ridl-lsp v1.4.0'
+  });
+  const context = {
+    subscriptions: [],
+    globalState: fakeGlobalState({ 'ridl.dismissedServerUpdateVersion': '1.5.0' })
+  };
+  await extension.__test.maybePromptServerUpdate(context, '/bin/ridl-lsp');
+  assert.equal(state.infos.length, 0);
+});
+
+test('maybePromptServerUpdate still prompts when the dismissal is older than recommended', async () => {
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '/bin/ridl-lsp',
+    serverVersion: 'ridl-lsp v1.4.0'
+  });
+  const context = {
+    subscriptions: [],
+    globalState: fakeGlobalState({ 'ridl.dismissedServerUpdateVersion': '1.4.5' })
+  };
+  await extension.__test.maybePromptServerUpdate(context, '/bin/ridl-lsp');
+  assert.equal(state.infos.length, 1);
+});
+
+test('maybePromptServerUpdate Update choice runs the update flow', async () => {
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '/opt/homebrew/bin/ridl-lsp',
+    serverVersion: 'ridl-lsp v1.4.0',
+    realpath: '/opt/homebrew/Cellar/ridl-lsp/1.4.0/bin/ridl-lsp',
+    brewPrefix: '/opt/homebrew',
+    infoChoice: 'Update'
+  });
+  const context = { subscriptions: [], globalState: fakeGlobalState() };
+  await extension.__test.maybePromptServerUpdate(context, '/opt/homebrew/bin/ridl-lsp');
+  assert.deepEqual(state.installerRuns, ['brew upgrade']);
+});
+
+test('maybePromptServerUpdate "Don\'t ask" persists the dismissal', async () => {
+  const { extension } = createUpdateHarness({
+    onPathBinary: '/bin/ridl-lsp',
+    serverVersion: 'ridl-lsp v1.4.0',
+    infoChoice: "Don't ask for 1.5.0"
+  });
+  const gs = fakeGlobalState();
+  const context = { subscriptions: [], globalState: gs };
+  await extension.__test.maybePromptServerUpdate(context, '/bin/ridl-lsp');
+  assert.equal(gs._store['ridl.dismissedServerUpdateVersion'], '1.5.0');
+});
+
+test('maybePromptServerUpdate does nothing when the server version is unknown', async () => {
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '/bin/ridl-lsp',
+    serverVersion: 'ridl-lsp dev'
+  });
+  const context = { subscriptions: [], globalState: fakeGlobalState() };
+  await extension.__test.maybePromptServerUpdate(context, '/bin/ridl-lsp');
+  assert.equal(state.infos.length, 0);
+});
+
+test('maybePromptServerUpdate never rejects when globalState.update fails', async () => {
+  const { extension } = createUpdateHarness({
+    onPathBinary: '/bin/ridl-lsp',
+    serverVersion: 'ridl-lsp v1.4.0',
+    infoChoice: "Don't ask for 1.5.0"
+  });
+  const context = {
+    subscriptions: [],
+    globalState: { get: () => undefined, update: () => Promise.reject(new Error('disk full')) }
+  };
+  // Must resolve, not throw.
+  await extension.__test.maybePromptServerUpdate(context, '/bin/ridl-lsp');
+});
+
+test('maybePromptServerUpdate prompts at most once for concurrent outdated checks', async () => {
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '/bin/ridl-lsp',
+    serverVersion: 'ridl-lsp v1.4.0'
+  });
+  const context = { subscriptions: [], globalState: fakeGlobalState() };
+  const first = extension.__test.maybePromptServerUpdate(context, '/bin/ridl-lsp');
+  const second = extension.__test.maybePromptServerUpdate(context, '/bin/ridl-lsp');
+  await Promise.all([first, second]);
+  assert.equal(state.infos.length, 1);
+});
+
+test('starting the server prompts for an outdated ridl-lsp without blocking startup', async () => {
+  const { extension, state } = createUpdateHarness({
+    onPathBinary: '/opt/homebrew/bin/ridl-lsp',
+    serverVersion: 'ridl-lsp v1.4.0'
+  });
+  const context = { subscriptions: [], globalState: fakeGlobalState() };
+  await extension.__test.ensureLanguageServerStarted(context, false);
+  await flushAsync();
+  assert.deepEqual(state.startedPaths, ['/opt/homebrew/bin/ridl-lsp']);
+  assert.equal(state.infos.length, 1);
+  assert.deepEqual(state.infoButtons[0], ['Update', 'Later', "Don't ask for 1.5.0"]);
 });
