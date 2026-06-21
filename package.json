@@ -3,7 +3,7 @@
   "displayName": "webrpc RIDL",
   "description": "Syntax highlighting and language server support for webrpc RIDL.",
   "icon": "assets/icon.png",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "webrpc-io",
   "license": "MIT",
   "repository": {
