@@ -1,5 +1,7 @@
 # RIDL for VS Code
 
+[![VS Marketplace](https://vsmarketplacebadges.dev/version-short/webrpc-io.ridl-vscode.svg)](https://marketplace.visualstudio.com/items?itemName=webrpc-io.ridl-vscode)
+
 RIDL adds first-class editor support for `.ridl` files used by webrpc schemas.
 
 ## Features
